@@ -1,22 +1,39 @@
 # Google SecOps Ephemeral Payload Bridge
 
 ## Overview
-A custom Python action for Google SecOps (Chronicle SOAR) designed to dynamically fetch ephemeral file payloads from backend server directories (`/opt/siemplify/...`) and attach them as persistent, native entities to the Case Wall. 
+A custom Python action for Google SecOps (Chronicle SOAR) designed to interact directly with the platform's ephemeral backend disk (`/opt/siemplify/...`). 
 
-This utility was engineered to bridge architectural gaps in the native FileUtilities integration, ensuring that vendor API downloads—specifically password-protected archives like those from FireEye HX—are preserved in the UI before routine backend storage cleanup occurs.
+When files are fetched via vendor APIs, they are temporarily written to the backend server before routine storage cleanup purges them. Native marketplace utilities often fail to handle these raw paths properly—especially when dealing with encrypted headers or unsupported file types. 
 
-## Architectural Problem
-When pulling files from vendor APIs to the Google SecOps backend, security engineers encounter two conflicting limitations within the native marketplace `FileUtilities`:
-1. **Extract Archive:** Accepts a backend server path but utilizes Python's `shutil` library, which lacks password support and crashes upon encountering encrypted headers.
-2. **Extract Zip Files:** Supports password decryption but interacts strictly with the platform's front-end UI layer. It requires a pre-existing `FILENAME` entity (Case Wall attachment) and cannot route to a raw disk path.
+This script bridges the architectural gap by dynamically grabbing the temporary backend file path and converting the raw ephemeral file into a persistent Case Wall attachment entity before the server deletes it.
 
-Furthermore, the ephemeral `/opt/siemplify/...` directories where these files land are routinely purged by the platform to conserve disk space, resulting in `[Errno 2] No such file or directory` execution failures if extraction is delayed.
+---
 
-## Solution
-This script extracts the dynamic file path immediately after the vendor API download step, reads the raw file from the backend disk, and utilizes `SiemplifyAction.add_attachment()` to bridge the file directly to the Case Wall. This converts the ephemeral disk file into a persistent UI entity, enabling native password-capable extraction workflows in subsequent playbook steps.
+## Real-World Example 1: FireEye HX Triage Pipeline
+When executing a **Get File** or **Acquire Triage** action via the FireEye HX integration, the payload is downloaded to the SecOps server as an encrypted ZIP archive (default password: `unzip-me`). 
+
+**The Architectural Gap:** 
+* Native **Extract Archive** uses `shutil` which crashes on encrypted headers.
+* Native **Extract Zip Files** handles passwords but requires a pre-existing UI entity, not a backend server path.
+* The `/opt/siemplify/...` directory is routinely purged, causing "No such file" errors if extraction is delayed.
+
+**The Automated Workflow Solution:**
+1. **FireEyeHX - Get File:** Downloads the archive to a temporary backend path.
+2. **Ephemeral Payload Bridge (This Script):** Dynamically grabs the temporary path from the action result and attaches the raw `.zip` directly to the Case Wall.
+3. **FileUtilities - Extract Zip Files:** Targets the newly attached UI entity, applies the `unzip-me` passphrase, and successfully extracts the triage logs directly into the case.
+
+---
+
+## Real-World Example 2: Universal File Retrieval (Any File on SOAR Server)
+The architecture is not limited to `.zip` files. Vendor APIs frequently drop varying formats (e.g., `.pcap`, raw JSON telemetry, `.exe` malware samples, `.mans` memory dumps) onto the ephemeral backend disk.
+
+**The Automated Workflow Solution:**
+1. **Vendor API - Download File:** Fetches the arbitrary file type to the backend server.
+2. **Ephemeral Payload Bridge (This Script):** Retrieves the dynamic file path and secures the raw file to the Case Wall UI. Once attached, it is safe from routine server purges and ready for subsequent playbook analysis (e.g., sending the `.exe` to a sandbox or parsing the JSON).
+
+---
 
 ## Installation & Configuration
-
 1. Navigate to the **IDE** in Google SecOps.
 2. Create a new Custom Action (e.g., `Attach Ephemeral Payload`).
 3. Paste the provided Python script into the editor.
@@ -27,8 +44,9 @@ This script extracts the dynamic file path immediately after the vendor API down
 8. Save and Publish the action.
 
 ## Playbook Usage
-
-1. Add the custom action to your playbook immediately following your file download step (e.g., `FireEyeHX - Get File`).
+1. Add the custom action to your playbook immediately following your file download step.
 2. In the action settings, click the dynamic variable icon `[ ]` next to the `File Path` parameter.
-3. Map this parameter to the **Action Result** of the preceding download step.
-4. *(Optional)* To extract encrypted archives, add the marketplace **Extract Zip Files** action immediately after this script. Set Entities to **Specific**, select the newly created attachment entity, and provide the required passphrase.
+3. Map this parameter to the **Action Result** of the preceding download step. 
+4. The script will securely bridge the file to the UI.
+
+---
