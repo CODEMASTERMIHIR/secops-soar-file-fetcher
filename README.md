@@ -24,7 +24,7 @@ When executing a **Get File** or **Acquire Triage** action via the FireEye HX in
 
 ---
 
-## Real-World Example 2: Universal File Retrieval (Any File on SOAR Server)
+## Example 2: Universal File Retrieval (Any File on SOAR Server)
 The architecture is not limited to `.zip` files. Vendor APIs frequently drop varying formats (e.g., `.pcap`, raw JSON telemetry, `.exe` malware samples, `.mans` memory dumps) onto the ephemeral backend disk.
 
 **The Automated Workflow Solution:**
